@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CraftMyHire - AI Interview Assistant</title>
+    <title>InteliHire - AI Interview Assistant</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -96,15 +96,37 @@
     </div>
 
     <script>
-        // File upload feedback
         document.getElementById('cv-upload').addEventListener('change', function(e) {
             const fileName = e.target.files[0]?.name || 'No file chosen';
             document.getElementById('cv-file-name').textContent = fileName;
         });
 
-        // Form submission with loading state
-        document.getElementById('analyzeForm').addEventListener('submit', function(e) {
-            document.getElementById('loading').style.display = 'flex';
+        document.getElementById('analyzeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const loadingDiv = document.getElementById('loading');
+            loadingDiv.style.display = 'flex';
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = `/results?analysis=${encodeURIComponent(data.analysis)}`;
+                } else {
+                    loadingDiv.style.display = 'none';
+                    alert('Error: ' + (data.error || 'Analysis failed'));
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                alert('Error: ' + error.message);
+            }
         });
     </script>
 </body>

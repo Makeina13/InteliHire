@@ -15,7 +15,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -43,7 +43,7 @@ def extract_cv_text(file_path):
     return ""
 
 def analyze_cv_with_ai(cv_text, job_description):
-    prompt = f"""You are an expert career advisor and CV analyst. Analyze the following CV against the job description provided.
+    prompt = f"""You are an expert CV writer and career advisor. Your job is to REWRITE and IMPROVE the user's CV to match the job description.
 
 CV Content:
 {cv_text}
@@ -51,38 +51,89 @@ CV Content:
 Job Description:
 {job_description}
 
-CRITICAL: First, determine if the candidate's background is realistic for this role. If the CV is from a completely different field (e.g., art background applying for software engineering, or healthcare applying for finance), you MUST be honest and state that this is not a suitable match.
+STEP 1 - REALISTIC FIT CHECK (CRITICAL):
+First, determine if this CV can realistically be adapted for this role.
 
-Please provide:
+UNSUITABLE MATCHES (Score below 30, DO NOT rewrite):
+- Art/Design CV applying for Software Engineering
+- Healthcare CV applying for Finance/Banking
+- Teaching CV applying for Data Science (without relevant skills)
+- Any CV where the core experience is completely unrelated
 
-1. REALISTIC FIT ASSESSMENT:
-   - Is this CV genuinely suitable for this role?
-   - If not, explain why and suggest more appropriate career paths
+If unsuitable, respond ONLY with:
+"MATCH STATUS: ❌ NOT SUITABLE
 
-2. SKILLS MATCH (only if realistic fit):
-   - Which required skills does the candidate have?
-   - Which required skills are missing?
+I cannot rewrite this CV for this role because [explain why in 2-3 sentences].
 
-3. EXPERIENCE ALIGNMENT (only if realistic fit):
-   - Does their experience match the role requirements?
-   - What relevant experience do they have?
+Your background is primarily in [their field]. This role requires [key job requirements].
 
-4. GAPS & WEAKNESSES:
-   - What are the major gaps?
-   - What needs improvement?
+RECOMMENDED ALTERNATIVE PATHS:
+1. [Alternative career path that fits their background]
+2. [Skills they could learn to transition - be specific]
+3. [Related roles that might be a better fit]
 
-5. STRENGTHS:
-   - What are the candidate's strongest points?
+If you want to transition to this field in the future, consider:
+- [Specific course or certification]
+- [Type of project they could build]
+- [Entry-level role to start with]"
 
-6. RECOMMENDATIONS:
-   - If suitable: Specific improvements for the CV
-   - If unsuitable: Alternative career paths that match their background
+STEP 2 - IF SUITABLE, REWRITE THE CV:
+If the CV CAN be adapted (even if it needs significant work), provide the following:
 
-7. OVERALL SCORE (0-100):
-   - Only give a score above 40 if the candidate is realistically suitable
-   - If unsuitable, score should be below 30
+MATCH STATUS: ✅ SUITABLE
+Match Score: [40-100]/100
 
-Be honest and helpful. Don't try to force-fit an unsuitable candidate."""
+═══════════════════════════════════════════════════════════════
+
+📝 IMPROVED PROFESSIONAL SUMMARY
+(Copy this to replace your current summary)
+
+[Write a compelling 3-4 sentence professional summary tailored specifically to this job. Include years of experience, key skills, and what value they bring.]
+
+═══════════════════════════════════════════════════════════════
+
+💼 IMPROVED EXPERIENCE SECTION
+(Copy these improved bullet points for each role)
+
+[Job Title] at [Company]
+- [Rewritten bullet using STAR format with specific metrics - e.g., "Increased sales by 25% by implementing..."]
+- [Rewritten bullet with quantifiable achievement]
+- [Rewritten bullet highlighting skill relevant to target job]
+
+[Repeat for other relevant positions]
+
+═══════════════════════════════════════════════════════════════
+
+🎯 SKILLS SECTION
+(Update your skills section to include these)
+
+Technical Skills: [List relevant technical skills they have]
+Soft Skills: [List relevant soft skills demonstrated in their CV]
+Add These If You Have Them: [Skills from job description they should add if applicable]
+
+═══════════════════════════════════════════════════════════════
+
+➕ SECTIONS TO ADD
+
+[Suggest any sections they should add - Projects, Certifications, Volunteer Work, etc. with specific examples of what to include]
+
+═══════════════════════════════════════════════════════════════
+
+➖ SECTIONS TO REMOVE OR REDUCE
+
+[List any sections that are irrelevant or taking up valuable space]
+
+═══════════════════════════════════════════════════════════════
+
+📋 QUICK SUMMARY OF CHANGES MADE
+
+1. [Key change #1 and why it improves the CV]
+2. [Key change #2 and why it improves the CV]
+3. [Key change #3 and why it improves the CV]
+
+═══════════════════════════════════════════════════════════════
+
+Remember: All improved content should be COPY-PASTE READY. The user should be able to directly use these sections in their CV."""
 
     response = model.generate_content(prompt)
     return response.text
@@ -133,6 +184,10 @@ def analyze():
         if os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+
+@app.route('/results')
+def results():
+    return render_template('results.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

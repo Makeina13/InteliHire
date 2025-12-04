@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results - InteliHire</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>InteliHire</h1>
+            <p class="tagline">Your Analysis Results</p>
+        </header>
+
+        <div class="results-section">
+            <div class="results-content">
+                <div id="analysis-results"></div>
+            </div>
+
+            <div class="action-buttons">
+                <a href="/" class="back-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Analyze Another CV</span>
+                </a>
+            </div>
+        </div>
+
+        <footer>
+            <p>Powered by AI • Secure & Confidential</p>
+        </footer>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const analysis = urlParams.get('analysis');
+        
+        if (analysis) {
+            const resultsDiv = document.getElementById('analysis-results');
+            const decodedAnalysis = decodeURIComponent(analysis);
+            
+            const formattedAnalysis = decodedAnalysis
+                .split('\n')
+                .map(line => {
+                    if (line.match(/^\d+\./)) {
+                        return `<h3 class="section-title">${line}</h3>`;
+                    } else if (line.match(/^[•\-]/)) {
+                        return `<p class="bullet-point">${line}</p>`;
+                    } else if (line.trim() === '') {
+                        return '<br>';
+                    } else {
+                        return `<p>${line}</p>`;
+                    }
+                })
+                .join('');
+            
+            resultsDiv.innerHTML = formattedAnalysis;
+        } else {
+            document.getElementById('analysis-results').innerHTML = 
+                '<p class="error">No analysis data found. Please try again.</p>';
+        }
+    </script>
+</body>
+</html>
