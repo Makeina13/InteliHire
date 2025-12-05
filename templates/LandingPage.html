@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InteliHire - AI Interview Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="landing-page">
+    <!-- Navigation bar -->
+    <nav class="navbar">
+        <div class="nav-logo">
+            <a href="{{ url_for('index') }}">InteliHire</a>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('index') }}">Home</a></li>
+            <li><a href="{{ url_for('upload_cv') }}">Upload CV</a></li>
+        </ul>
+        <a href="{{ url_for('upload_cv') }}" class="nav-cta">Get started</a>
+    </nav>
+
+    <!-- Hero section -->
+<section class="hero">
+    <div class="hero-content">
+
+        <!-- Logo goes here -->
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="InteliHire Logo" class="hero-logo">
+
+        <h1>Land your next interview with confidence.</h1>
+        <p>InteliHire analyses your CV and the job description to coach you for interviews using AI.</p>
+
+        <a href="{{ url_for('upload_cv') }}" class="btn primary-btn">
+            Upload your CV
+        </a>
+    </div>
+</section>
+
+</body>
+</html>

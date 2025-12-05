@@ -17,8 +17,10 @@ ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel('gemini-2.5-flash')
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def extract_text_from_pdf(file_path):
     text = ""
@@ -28,6 +30,7 @@ def extract_text_from_pdf(file_path):
             text += page.extract_text()
     return text
 
+
 def extract_text_from_docx(file_path):
     doc = Document(file_path)
     text = ""
@@ -35,12 +38,14 @@ def extract_text_from_docx(file_path):
         text += paragraph.text + "\n"
     return text
 
+
 def extract_cv_text(file_path):
     if file_path.endswith('.pdf'):
         return extract_text_from_pdf(file_path)
     elif file_path.endswith('.docx'):
         return extract_text_from_docx(file_path)
     return ""
+
 
 def analyze_cv_with_ai(cv_text, job_description):
     prompt = f"""You are an expert CV writer and career advisor. Your job is to REWRITE and IMPROVE the user's CV to match the job description.
@@ -134,60 +139,76 @@ Add These If You Have Them: [Skills from job description they should add if appl
 ═══════════════════════════════════════════════════════════════
 
 Remember: All improved content should be COPY-PASTE READY. The user should be able to directly use these sections in their CV."""
-
     response = model.generate_content(prompt)
     return response.text
 
+
+# ─────────────────────────────────────────────
+# ROUTES
+# ─────────────────────────────────────────────
+
+# Landing page route
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Make sure you have templates/landingpage.html
+    return render_template('landingpage.html')
+
+
+# CV upload page route (separate page for the form)
+@app.route('/upload')
+def upload_cv():
+    # Make sure you have templates/Cvupload.html
+    return render_template('Cvupload.html')
+
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'cv' not in request.files:
         return jsonify({'error': 'No CV file uploaded'}), 400
-    
+
     file = request.files['cv']
     job_description = request.form.get('job_description', '')
-    
+
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-    
+
     if not allowed_file(file.filename):
         return jsonify({'error': 'Invalid file type. Please upload PDF or DOCX'}), 400
-    
+
     if not job_description:
         return jsonify({'error': 'Job description is required'}), 400
-    
+
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
+
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     file.save(filepath)
-    
+
     try:
         cv_text = extract_cv_text(filepath)
-        
+
         if not cv_text or len(cv_text.strip()) < 50:
             return jsonify({'error': 'Could not extract text from CV. Please check the file.'}), 400
-        
+
         analysis = analyze_cv_with_ai(cv_text, job_description)
-        
+
         os.remove(filepath)
-        
+
         return jsonify({
             'success': True,
             'analysis': analysis
         })
-    
+
     except Exception as e:
         if os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
 
+
 @app.route('/results')
 def results():
     return render_template('results.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)

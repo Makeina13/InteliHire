@@ -6,7 +6,20 @@
     <title>InteliHire - AI Interview Assistant</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="upload-page">
+
+    <!-- Navigation bar -->
+    <nav class="navbar">
+        <div class="nav-logo">
+            <a href="{{ url_for('index') }}">InteliHire</a>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('index') }}">Home</a></li>
+            <li><a href="{{ url_for('upload_cv') }}">Upload CV</a></li>
+        </ul>
+        <a href="{{ url_for('upload_cv') }}" class="nav-cta">Get started</a>
+    </nav>
+
     <div class="container">
         <!-- Header -->
         <header>
@@ -49,7 +62,13 @@
                         id="job-description" 
                         name="job_description" 
                         rows="8" 
-                        placeholder="Paste the job description here...&#10;&#10;Include:&#10;• Required skills&#10;• Responsibilities&#10;• Qualifications&#10;• Company culture"
+                        placeholder="Paste the job description here...
+
+Include:
+• Required skills
+• Responsibilities
+• Qualifications
+• Company culture"
                         required
                     ></textarea>
                 </div>
