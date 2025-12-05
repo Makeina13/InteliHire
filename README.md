@@ -48,9 +48,15 @@ What it does right now
 Future plans: 
 
 Add a live camera interview with an AI that wull ask questions based on the role you are looking for 
+
 give feedback from that interview with a score rating and information on how to do better 
+
 add rate limiting 
+
 add authentication
+
 add HTTPS security 
+
 add input valdation 
+
 *and more*
