@@ -1,4 +1,5 @@
 InteliHire – AI Interview & CV Helper
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 This is a little project we are building to help everyone land a job and get better at interviews 
@@ -11,9 +12,8 @@ paste in a job description
 
 get AI-powered feedback and a rewritten CV tailored to that role
 
-It’s still very much a work-in-progress, but the plan is to eventually push this live so people can actually use it, not just look at the code on GitHub.
-
 What it does right now
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
  Upload a CV and extract the text (PDF & DOCX supported)
 
@@ -23,29 +23,32 @@ What it does right now
 
  Has a simple landing page + a separate CV upload page with nicer CSS and a glowing logo because… why not
 
-    Tech stack
+   Tech stack
+   ------------------------------------------------------------------------------------------------------
     
-    Python + Flask
+   Python + Flask
     
-    Google Gemini API for the AI stuff
+   Google Gemini API for the AI 
     
-    HTML/CSS + a bit of JS for the frontend
+   HTML/CSS + a bit of JS for the frontend
     
-    How to run it
+   How to run it
+   -------------------------------------------------------------------------------------------------------
     
-    Clone the repo, install deps, and run Flask:
+   Clone the repo, install deps, and run Flask:
     
-    pip install -r requirements.txt
-    python app.py
+   pip install -r requirements.txt
+   python app.py
     
     
-    Then open your browser at http://127.0.0.1:5000/.
+   Then open your browser at http://127.0.0.1:5000/.
     
-    You’ll also need a GEMINI_API_KEY in a .env file:
+   You’ll also need a GEMINI_API_KEY in a .env file:
     
-    GEMINI_API_KEY=your_api_key_here
+   GEMINI_API_KEY=your_api_key_here
 
 Future plans: 
+----------------------------------------------------------------------------------------------------------
 
 Add a live camera interview with an AI that wull ask questions based on the role you are looking for 
 
@@ -58,5 +61,9 @@ add authentication
 add HTTPS security 
 
 add input valdation 
+
+integrate webRTC 
+
+integrate web speech API
 
 *and more*
