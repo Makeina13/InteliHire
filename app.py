@@ -9,10 +9,12 @@ import PyPDF2
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+MAX_JOB_DESCRIPTION_LENGTH = 10000
 
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel('gemini-2.5-flash')
@@ -66,7 +68,7 @@ UNSUITABLE MATCHES (Score below 30, DO NOT rewrite):
 - Any CV where the core experience is completely unrelated
 
 If unsuitable, respond ONLY with:
-"MATCH STATUS: ❌ NOT SUITABLE
+"MATCH STATUS: NOT SUITABLE
 
 I cannot rewrite this CV for this role because [explain why in 2-3 sentences].
 
@@ -85,79 +87,57 @@ If you want to transition to this field in the future, consider:
 STEP 2 - IF SUITABLE, REWRITE THE CV:
 If the CV CAN be adapted (even if it needs significant work), provide the following:
 
-MATCH STATUS: ✅ SUITABLE
+MATCH STATUS: SUITABLE
 Match Score: [40-100]/100
 
-═══════════════════════════════════════════════════════════════
-
-📝 IMPROVED PROFESSIONAL SUMMARY
+IMPROVED PROFESSIONAL SUMMARY
 (Copy this to replace your current summary)
 
 [Write a compelling 3-4 sentence professional summary tailored specifically to this job. Include years of experience, key skills, and what value they bring.]
 
-═══════════════════════════════════════════════════════════════
-
-💼 IMPROVED EXPERIENCE SECTION
+IMPROVED EXPERIENCE SECTION
 (Copy these improved bullet points for each role)
 
 [Job Title] at [Company]
-- [Rewritten bullet using STAR format with specific metrics - e.g., "Increased sales by 25% by implementing..."]
+- [Rewritten bullet using STAR format with specific metrics]
 - [Rewritten bullet with quantifiable achievement]
 - [Rewritten bullet highlighting skill relevant to target job]
 
 [Repeat for other relevant positions]
 
-═══════════════════════════════════════════════════════════════
-
-🎯 SKILLS SECTION
+SKILLS SECTION
 (Update your skills section to include these)
 
 Technical Skills: [List relevant technical skills they have]
 Soft Skills: [List relevant soft skills demonstrated in their CV]
 Add These If You Have Them: [Skills from job description they should add if applicable]
 
-═══════════════════════════════════════════════════════════════
-
-➕ SECTIONS TO ADD
+SECTIONS TO ADD
 
 [Suggest any sections they should add - Projects, Certifications, Volunteer Work, etc. with specific examples of what to include]
 
-═══════════════════════════════════════════════════════════════
-
-➖ SECTIONS TO REMOVE OR REDUCE
+SECTIONS TO REMOVE OR REDUCE
 
 [List any sections that are irrelevant or taking up valuable space]
 
-═══════════════════════════════════════════════════════════════
-
-📋 QUICK SUMMARY OF CHANGES MADE
+QUICK SUMMARY OF CHANGES MADE
 
 1. [Key change #1 and why it improves the CV]
 2. [Key change #2 and why it improves the CV]
 3. [Key change #3 and why it improves the CV]
-
-═══════════════════════════════════════════════════════════════
 
 Remember: All improved content should be COPY-PASTE READY. The user should be able to directly use these sections in their CV."""
     response = model.generate_content(prompt)
     return response.text
 
 
-# ─────────────────────────────────────────────
-# ROUTES
-# ─────────────────────────────────────────────
-
-# Landing page route
 @app.route('/')
 def index():
-    # Make sure you have templates/landingpage.html
     return render_template('landingpage.html')
 
 
-# CV upload page route (separate page for the form)
 @app.route('/upload')
 def upload_cv():
-    # Make sure you have templates/Cvupload.html
     return render_template('Cvupload.html')
 
 
@@ -177,6 +157,9 @@ def analyze():
 
     if not job_description:
         return jsonify({'error': 'Job description is required'}), 400
+
+    if len(job_description) > MAX_JOB_DESCRIPTION_LENGTH:
+        return jsonify({'error': 'Job description too long. Maximum 10,000 characters.'}), 400
 
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -200,9 +183,10 @@ def analyze():
         })
 
     except Exception as e:
+        print(f"Analysis error: {str(e)}")
         if os.path.exists(filepath):
             os.remove(filepath)
-        return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+        return jsonify({'error': 'Analysis failed. Please try again.'}), 500
 
 
 @app.route('/results')
@@ -211,4 +195,4 @@ def results():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False) 
