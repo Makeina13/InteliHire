@@ -6,7 +6,20 @@
     <title>Analysis Results - InteliHire</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="upload-page">
+
+    <!-- Navigation bar -->
+    <nav class="navbar">
+        <div class="nav-logo">
+            <a href="{{ url_for('index') }}">InteliHire</a>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('index') }}">Home</a></li>
+            <li><a href="{{ url_for('upload_cv') }}">Upload CV</a></li>
+        </ul>
+        <a href="{{ url_for('upload_cv') }}" class="nav-cta">Get started</a>
+    </nav>
+
     <div class="container">
         <header>
             <h1>InteliHire</h1>
@@ -19,7 +32,7 @@
             </div>
 
             <div class="action-buttons">
-                <a href="/" class="back-btn">
+                <a href="{{ url_for('upload_cv') }}" class="back-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
@@ -30,7 +43,7 @@
         </div>
 
         <footer>
-            <p>Powered by AI • Secure & Confidential</p>
+            <p>Powered by InteliHire • Secure & Confidential</p>
         </footer>
     </div>
 
@@ -42,17 +55,24 @@
             const resultsDiv = document.getElementById('analysis-results');
             const decodedAnalysis = decodeURIComponent(analysis);
             
+            function sanitizeHTML(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
             const formattedAnalysis = decodedAnalysis
                 .split('\n')
                 .map(line => {
+                    const safeLine = sanitizeHTML(line);
                     if (line.match(/^\d+\./)) {
-                        return `<h3 class="section-title">${line}</h3>`;
+                        return `<h3 class="section-title">${safeLine}</h3>`;
                     } else if (line.match(/^[•\-]/)) {
-                        return `<p class="bullet-point">${line}</p>`;
+                        return `<p class="bullet-point">${safeLine}</p>`;
                     } else if (line.trim() === '') {
                         return '<br>';
                     } else {
-                        return `<p>${line}</p>`;
+                        return `<p>${safeLine}</p>`;
                     }
                 })
                 .join('');

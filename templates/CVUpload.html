@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InteliHire - AI Interview Assistant</title>
+    <title>Upload CV - InteliHire</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="upload-page">
@@ -29,7 +29,7 @@
 
         <!-- Main Form -->
         <div class="upload-section">
-            <form action="/analyze" method="POST" enctype="multipart/form-data" id="analyzeForm">
+            <form action="{{ url_for('analyze') }}" method="POST" enctype="multipart/form-data" id="analyzeForm">
                 
                 <!-- CV Upload -->
                 <div class="form-group">
@@ -43,7 +43,7 @@
                     </label>
                     <input type="file" id="cv-upload" name="cv" accept=".pdf,.docx" required>
                     <span class="file-name" id="cv-file-name">No file chosen</span>
-                    <p class="hint">PDF or DOCX format</p>
+                    <p class="hint">PDF or DOCX format (max 16MB)</p>
                 </div>
 
                 <!-- Job Description Input -->
@@ -62,15 +62,17 @@
                         id="job-description" 
                         name="job_description" 
                         rows="8" 
+                        maxlength="10000"
                         placeholder="Paste the job description here...
 
 Include:
-• Required skills
-• Responsibilities
-• Qualifications
-• Company culture"
+- Required skills
+- Responsibilities
+- Qualifications
+- Company culture"
                         required
                     ></textarea>
+                    <p class="hint" id="char-count">0 / 10,000 characters</p>
                 </div>
 
                 <!-- Job Link (Optional) -->
@@ -92,7 +94,7 @@ Include:
                 </div>
 
                 <!-- Submit Button -->
-                <button type="submit" class="submit-btn">
+                <button type="submit" class="submit-btn" id="submit-btn">
                     <span>Analyze My Profile</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -106,6 +108,7 @@ Include:
         <div class="loading" id="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Analyzing your profile with AI...</p>
+            <p class="hint">This may take 15-30 seconds</p>
         </div>
 
         <!-- Footer -->
@@ -115,21 +118,35 @@ Include:
     </div>
 
     <script>
+        // File upload feedback
         document.getElementById('cv-upload').addEventListener('change', function(e) {
             const fileName = e.target.files[0]?.name || 'No file chosen';
             document.getElementById('cv-file-name').textContent = fileName;
         });
 
+        // Character count for job description
+        document.getElementById('job-description').addEventListener('input', function(e) {
+            const count = e.target.value.length;
+            document.getElementById('char-count').textContent = `${count.toLocaleString()} / 10,000 characters`;
+        });
+
+        // Form submission with loading state
         document.getElementById('analyzeForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const loadingDiv = document.getElementById('loading');
+            const submitBtn = document.getElementById('submit-btn');
+            const uploadSection = document.querySelector('.upload-section');
+            
+            // Hide form and show loading
+            uploadSection.style.display = 'none';
             loadingDiv.style.display = 'flex';
+            submitBtn.disabled = true;
             
             const formData = new FormData(this);
             
             try {
-                const response = await fetch('/analyze', {
+                const response = await fetch('{{ url_for("analyze") }}', {
                     method: 'POST',
                     body: formData
                 });
@@ -139,12 +156,18 @@ Include:
                 if (data.success) {
                     window.location.href = `/results?analysis=${encodeURIComponent(data.analysis)}`;
                 } else {
+                    // Show form again on error
+                    uploadSection.style.display = 'block';
                     loadingDiv.style.display = 'none';
-                    alert('Error: ' + (data.error || 'Analysis failed'));
+                    submitBtn.disabled = false;
+                    alert('Error: ' + (data.error || 'Analysis failed. Please try again.'));
                 }
             } catch (error) {
+                // Show form again on error
+                uploadSection.style.display = 'block';
                 loadingDiv.style.display = 'none';
-                alert('Error: ' + error.message);
+                submitBtn.disabled = false;
+                alert('Error: Unable to connect. Please check your internet and try again.');
             }
         });
     </script>
