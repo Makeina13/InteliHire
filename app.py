@@ -50,7 +50,26 @@ def extract_cv_text(file_path):
 
 
 def analyze_cv_with_ai(cv_text, job_description):
-    prompt = f"""You are an expert CV writer and career advisor. Your job is to REWRITE and IMPROVE the user's CV to match the job description.
+    prompt = f"""Rewrite this CV to match the job. You must write like an actual human, not AI.
+
+STRICT RULES TO AVOID AI DETECTION:
+
+1. Use contractions: "I'm" not "I am", "don't" not "do not", "I've" not "I have"
+2. Start sentences differently - not everything with "I"
+3. Use casual connecting words: "Also", "Plus", "On top of that", "Honestly"
+4. Include filler phrases humans use: "pretty much", "a lot of", "kind of", "basically"
+5. Make small imperfections - don't be too polished
+6. Use shorter sentences mixed with longer ones
+7. Be specific and personal, not generic
+8. Avoid these AI words completely: passionate, driven, dedicated, motivated, thrive, leverage, spearhead, utilize, facilitate, innovative, dynamic, synergy, proactive, endeavor, comprehensive, enhance, foster, implement, streamline, optimize
+9. Sound like a real person talking about their job, not a LinkedIn post
+10. Use "got" instead of "obtained", "helped" instead of "assisted", "worked on" instead of "contributed to"
+
+BAD EXAMPLE (AI-sounding):
+"I am a motivated A-level student with a strong interest in digital innovation and data science. My studies in Mathematics have given me a solid foundation. I'm keen to apply these skills to complex challenges and contribute to the company's digital transformation goals."
+
+GOOD EXAMPLE (Human-sounding):
+"I'm finishing my A-levels in 2026 - doing Maths and Computer Science. I've been teaching myself Python and built a few small projects, nothing fancy but I learned a lot. Honestly, I just want to get stuck in somewhere and see what working in tech is actually like."
 
 CV Content:
 {cv_text}
@@ -58,75 +77,55 @@ CV Content:
 Job Description:
 {job_description}
 
-STEP 1 - REALISTIC FIT CHECK (CRITICAL):
-First, determine if this CV can realistically be adapted for this role.
+First check if this CV fits the role. If someone with an art background applies for software engineering, or healthcare for finance, say it's not suitable.
 
-UNSUITABLE MATCHES (Score below 30, DO NOT rewrite):
-- Art/Design CV applying for Software Engineering
-- Healthcare CV applying for Finance/Banking
-- Teaching CV applying for Data Science (without relevant skills)
-- Any CV where the core experience is completely unrelated
+If NOT SUITABLE:
 
-If unsuitable, respond ONLY with:
-"MATCH STATUS: NOT SUITABLE
+MATCH STATUS: NOT SUITABLE
 
-I cannot rewrite this CV for this role because [explain why in 2-3 sentences].
+This CV doesn't fit this role because [short reason].
 
-Your background is primarily in [their field]. This role requires [key job requirements].
+Your experience is in [field]. This job needs [requirements].
 
-RECOMMENDED ALTERNATIVE PATHS:
-1. [Alternative career path that fits their background]
-2. [Skills they could learn to transition - be specific]
-3. [Related roles that might be a better fit]
+Better options for you:
+1. [Role that fits]
+2. [Skills to learn]
+3. [Related jobs]
 
-If you want to transition to this field in the future, consider:
-- [Specific course or certification]
-- [Type of project they could build]
-- [Entry-level role to start with]"
-
-STEP 2 - IF SUITABLE, REWRITE THE CV:
-If the CV CAN be adapted (even if it needs significant work), provide the following:
+If SUITABLE:
 
 MATCH STATUS: SUITABLE
-Match Score: [40-100]/100
+Score: [40-100]/100
 
-IMPROVED PROFESSIONAL SUMMARY
-(Copy this to replace your current summary)
+PROFESSIONAL SUMMARY
 
-[Write a compelling 3-4 sentence professional summary tailored specifically to this job. Include years of experience, key skills, and what value they bring.]
+[Write 2-3 sentences MAX. Use contractions. Sound like a real person. Be specific. No buzzwords.]
 
-IMPROVED EXPERIENCE SECTION
-(Copy these improved bullet points for each role)
+EXPERIENCE
 
-[Job Title] at [Company]
-- [Rewritten bullet using STAR format with specific metrics]
-- [Rewritten bullet with quantifiable achievement]
-- [Rewritten bullet highlighting skill relevant to target job]
+[Job] at [Company]
+- [Short, natural bullet. Use numbers. Sound human.]
+- [Mix up how you start each bullet]
+- [Don't be too formal]
 
-[Repeat for other relevant positions]
+SKILLS
 
-SKILLS SECTION
-(Update your skills section to include these)
+[Just list them simply, no fancy descriptions]
 
-Technical Skills: [List relevant technical skills they have]
-Soft Skills: [List relevant soft skills demonstrated in their CV]
-Add These If You Have Them: [Skills from job description they should add if applicable]
+ADD THESE SECTIONS
 
-SECTIONS TO ADD
+[What to add]
 
-[Suggest any sections they should add - Projects, Certifications, Volunteer Work, etc. with specific examples of what to include]
+REMOVE THESE
 
-SECTIONS TO REMOVE OR REDUCE
+[What to cut]
 
-[List any sections that are irrelevant or taking up valuable space]
+WHAT I CHANGED
 
-QUICK SUMMARY OF CHANGES MADE
+1. [Change]
+2. [Change]
+3. [Change]"""
 
-1. [Key change #1 and why it improves the CV]
-2. [Key change #2 and why it improves the CV]
-3. [Key change #3 and why it improves the CV]
-
-Remember: All improved content should be COPY-PASTE READY. The user should be able to directly use these sections in their CV."""
     response = model.generate_content(prompt)
     return response.text
 
@@ -195,4 +194,4 @@ def results():
 
 
 if __name__ == '__main__':
-    app.run(debug=False) 
+    app.run(debug=False)
