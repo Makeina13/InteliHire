@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analysis Results - InteliHire</title>
+    <title>CV Ready - InteliHire</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body class="upload-page">
 
-    <!-- Navigation bar -->
+
+<body class="upload-page">
+ <!-- Navigation bar -->
     <nav class="navbar">
         <div class="nav-logo">
             <a href="{{ url_for('index') }}">InteliHire</a>
@@ -19,68 +19,34 @@
         </ul>
         <a href="{{ url_for('upload_cv') }}" class="nav-cta">Get started</a>
     </nav>
+    </nav>
 
     <div class="container">
-        <header>
-            <h1>InteliHire</h1>
-            <p class="tagline">Your Analysis Results</p>
-        </header>
-
-        <div class="results-section">
-            <div class="results-content">
-                <div id="analysis-results"></div>
-            </div>
-
-            <div class="action-buttons">
-                <a href="{{ url_for('upload_cv') }}" class="back-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                    <span>Analyze Another CV</span>
-                </a>
-            </div>
+        <div class="results-section" style="text-align: center; padding: 4rem;">
+            <h1>CV Generated!</h1>
+            <p>Your new professional CV is ready for download.</p>
+            
+            <a id="download-btn" href="#" class="submit-btn" style="margin: 2rem auto; display: inline-block; text-decoration: none;">
+                Download PDF
+            </a>
+            
+            <br><br>
+            <a href="{{ url_for('upload_cv') }}" style="color: #94a3b8;">Create Another</a>
         </div>
-
-        <footer>
-            <p>Powered by InteliHire • Secure & Confidential</p>
-        </footer>
     </div>
 
     <script>
+        // Get the PDF URL from the browser address bar
         const urlParams = new URLSearchParams(window.location.search);
-        const analysis = urlParams.get('analysis');
+        const pdfLink = urlParams.get('pdf');
         
-        if (analysis) {
-            const resultsDiv = document.getElementById('analysis-results');
-            const decodedAnalysis = decodeURIComponent(analysis);
-            
-            function sanitizeHTML(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-            
-            const formattedAnalysis = decodedAnalysis
-                .split('\n')
-                .map(line => {
-                    const safeLine = sanitizeHTML(line);
-                    if (line.match(/^\d+\./)) {
-                        return `<h3 class="section-title">${safeLine}</h3>`;
-                    } else if (line.match(/^[•\-]/)) {
-                        return `<p class="bullet-point">${safeLine}</p>`;
-                    } else if (line.trim() === '') {
-                        return '<br>';
-                    } else {
-                        return `<p>${safeLine}</p>`;
-                    }
-                })
-                .join('');
-            
-            resultsDiv.innerHTML = formattedAnalysis;
+        if (pdfLink) {
+            // Set the button to download that PDF
+            document.getElementById('download-btn').href = pdfLink;
+            // Auto-start download
+            setTimeout(() => { window.location.href = pdfLink; }, 1000);
         } else {
-            document.getElementById('analysis-results').innerHTML = 
-                '<p class="error">No analysis data found. Please try again.</p>';
+            document.querySelector('.results-section').innerHTML = '<p style="color:red">Error: No PDF found.</p>';
         }
     </script>
 </body>
