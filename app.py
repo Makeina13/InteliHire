@@ -36,51 +36,61 @@ generation_config = genai.GenerationConfig(
     response_mime_type="application/json"
 )
 
-# --- SMART MODEL LIST GENERATOR ---
 def get_prioritized_model_list():
     """
-    Returns a list of ALL valid model names your account has access to,
-    sorted by our preference (2.0 -> Flash -> Pro).
+    Returns sorted list for your specific 2025 model inventory:
+    1. Flash Lite (Best for high volume testing/lowest cost)
+    2. Flash 2.5 (Smartest Fast Model)
+    3. Flash 2.0 (Stable Backup)
+    4. Pro / Others
     """
     print("--------------------------------------------------")
     print("📋 BUILDING MODEL LIST...")
     
     try:
-        # 1. Get every model you actually own
         all_my_models = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
-                # Strip the 'models/' prefix for cleaner usage
                 name = m.name.replace('models/', '')
                 all_my_models.append(name)
         
-        # 2. Sort them by preference
-        # We want to try 2.0 first, then Flash, then Pro.
         prioritized = []
         
-        # Priority 1: Gemini 2.0
-        prioritized.extend([m for m in all_my_models if 'gemini-2.0' in m])
+        # --- FIXED SORTING LOGIC FOR YOUR LIST ---
         
-        # Priority 2: Flash (Any version)
-        prioritized.extend([m for m in all_my_models if 'flash' in m and m not in prioritized])
+        # PRIORITY 1: "Flash Lite" (The new "Testing" King)
+        # Matches: 'gemini-2.0-flash-lite', 'gemini-2.5-flash-lite', etc.
+        # We put the "latest" aliases last to prefer specific versions like '001'
+        p1 = [m for m in all_my_models if 'flash' in m and 'lite' in m]
+        # Sort to prefer production versions (no 'preview') if available, or just take first
+        p1.sort(key=lambda x: 'preview' in x) 
+        prioritized.extend(p1)
+
+        # PRIORITY 2: Gemini 2.5 Flash (The smartest fast model)
+        p2 = [m for m in all_my_models if 'gemini-2.5-flash' in m and m not in prioritized]
+        prioritized.extend(p2)
+
+        # PRIORITY 3: Gemini 2.0 Flash (Stable backup)
+        p3 = [m for m in all_my_models if 'gemini-2.0-flash' in m and m not in prioritized]
+        prioritized.extend(p3)
         
-        # Priority 3: Pro / Standard (Any version)
-        prioritized.extend([m for m in all_my_models if 'pro' in m and m not in prioritized])
-        
-        # Priority 4: Whatever is left
+        # PRIORITY 4: Everything else (Pro, Gemma, etc.)
         for m in all_my_models:
             if m not in prioritized:
-                prioritized.append(m)
+                # Filter out the robotics model to be safe
+                if 'robotics' not in m:
+                    prioritized.append(m)
                 
         print(f"✅ Found {len(prioritized)} valid models.")
-        print(f"🚀 Priority Order: {prioritized}")
+        if len(prioritized) > 0:
+            print(f"🚀 Top Pick (Priority 1): {prioritized[0]}")
         print("--------------------------------------------------")
         return prioritized
 
     except Exception as e:
         print(f"❌ Error listing models: {e}")
-        # Emergency Fallback if list fails
-        return ['gemini-2.0-flash-exp', 'gemini-flash-latest', 'gemini-pro']
+        # Fallback to the names found in your list
+        return ['gemini-2.0-flash-lite-001', 'gemini-2.5-flash', 'gemini-2.0-flash']
 
 # Initialize the list ONCE when server starts
 VALID_MODELS = get_prioritized_model_list()
