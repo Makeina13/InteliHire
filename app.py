@@ -296,6 +296,7 @@ def analyze():
 
         pdf_name = f"Improved_CV_{os.urandom(4).hex()}.pdf"
         create_pdf(cv_data, pdf_name)
+        quality_report = generate_quality_report(cv_data)
         
         return jsonify({'success': True, 'pdf_url': f"/download/{pdf_name}"})
     except Exception as e:
