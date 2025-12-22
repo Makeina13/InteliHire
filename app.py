@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, abort
 import os
 import json
 import re
 import random
+import logging
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -17,13 +18,37 @@ from reportlab.lib.units import mm, cm
 
 load_dotenv()
 
+# Configure logging for security events (logs errors server-side, not to users)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+
+# Security: Use strong secret key from environment, fail if not set in production
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    if os.getenv('FLASK_ENV') == 'production':
+        raise ValueError("SECRET_KEY must be set in production environment")
+    secret_key = os.urandom(24)
+app.secret_key = secret_key
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['GENERATED_FOLDER'] = 'generated'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
+# Security: Restrict allowed file extensions
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+
+# Security: Allowed characters in filenames (alphanumeric, underscore, hyphen, period)
+SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -33,45 +58,45 @@ genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 COLOR_SCHEMES = [
     {
         'name': 'Black + White + Grey',
-        'sidebar_bg': '#2b2b2b',          # Dark grey sidebar (like Rory Hunter)
-        'header_bg': '#e8e8e8',           # Light grey header box
-        'header_border': '#000000',       # Black border for header
-        'text_dark': '#1a1a1a',           # Dark text
-        'text_medium': '#4a4a4a',         # Medium grey text
-        'text_light': '#6a6a6a',          # Light grey text
-        'line_color': '#000000',          # Black lines/accents
-        'sidebar_text': '#FFFFFF'         # White text in sidebar
+        'sidebar_bg': '#2b2b2b',
+        'header_bg': '#e8e8e8',
+        'header_border': '#000000',
+        'text_dark': '#1a1a1a',
+        'text_medium': '#4a4a4a',
+        'text_light': '#6a6a6a',
+        'line_color': '#000000',
+        'sidebar_text': '#FFFFFF'
     },
     {
         'name': 'Navy Blue + White + Grey',
-        'sidebar_bg': '#1B365D',          # Navy blue sidebar
-        'header_bg': '#f0f4f8',           # Light blue-grey header
-        'header_border': '#1B365D',       # Navy border
+        'sidebar_bg': '#1B365D',
+        'header_bg': '#f0f4f8',
+        'header_border': '#1B365D',
         'text_dark': '#1a1a1a',
         'text_medium': '#4a4a4a',
-        'text_light': '#1B365D',          # Navy accents
+        'text_light': '#1B365D',
         'line_color': '#1B365D',
         'sidebar_text': '#FFFFFF'
     },
     {
         'name': 'Forest Green + White + Grey',
-        'sidebar_bg': '#1e5631',          # Forest green sidebar
-        'header_bg': '#f0f8f0',           # Light green-grey header
-        'header_border': '#228B22',       # Green border
+        'sidebar_bg': '#1e5631',
+        'header_bg': '#f0f8f0',
+        'header_border': '#228B22',
         'text_dark': '#1a1a1a',
         'text_medium': '#4a4a4a',
-        'text_light': '#228B22',          # Green accents
+        'text_light': '#228B22',
         'line_color': '#228B22',
         'sidebar_text': '#FFFFFF'
     },
     {
         'name': 'Purple + White + Grey',
-        'sidebar_bg': '#4a3a5f',          # Purple sidebar
-        'header_bg': '#f5f0f8',           # Light purple-grey header
-        'header_border': '#6B4C9A',       # Purple border
+        'sidebar_bg': '#4a3a5f',
+        'header_bg': '#f5f0f8',
+        'header_border': '#6B4C9A',
         'text_dark': '#1a1a1a',
         'text_medium': '#4a4a4a',
-        'text_light': '#6B4C9A',          # Purple accents
+        'text_light': '#6B4C9A',
         'line_color': '#6B4C9A',
         'sidebar_text': '#FFFFFF'
     }
@@ -109,8 +134,7 @@ def get_generation_config(cadence):
     )
 
 def get_prioritized_model_list():
-    print("--------------------------------------------------")
-    print("📋 BUILDING MODEL LIST...")
+    logger.info("Building model list...")
     
     try:
         all_my_models = []
@@ -136,14 +160,13 @@ def get_prioritized_model_list():
                 if 'robotics' not in m:
                     prioritized.append(m)
                 
-        print(f"✅ Found {len(prioritized)} valid models.")
+        logger.info(f"Found {len(prioritized)} valid models.")
         if len(prioritized) > 0:
-            print(f"🚀 Top Pick (Priority 1): {prioritized[0]}")
-        print("--------------------------------------------------")
+            logger.info(f"Top Pick (Priority 1): {prioritized[0]}")
         return prioritized
 
     except Exception as e:
-        print(f"❌ Error listing models: {e}")
+        logger.error(f"Error listing models: {e}")
         return ['gemini-2.0-flash-lite-001', 'gemini-2.5-flash', 'gemini-2.0-flash']
 
 VALID_MODELS = get_prioritized_model_list()
@@ -208,7 +231,49 @@ def clean_cv_data(cv_data):
     return cv_data
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    """Security: Validate file extension"""
+    if not filename or '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in ALLOWED_EXTENSIONS
+
+def is_safe_filename(filename):
+    """Security: Check if filename contains only safe characters"""
+    if not filename:
+        return False
+    # Use secure_filename first, then validate
+    secured = secure_filename(filename)
+    if not secured or secured != filename:
+        return False
+    return bool(SAFE_FILENAME_PATTERN.match(secured))
+
+def validate_file_path(directory, filename):
+    """
+    Security: Prevent path traversal attacks
+    Returns the safe absolute path if valid, None otherwise
+    """
+    if not filename:
+        return None
+    
+    # Sanitize the filename
+    safe_filename = secure_filename(filename)
+    if not safe_filename:
+        return None
+    
+    # Construct the full path
+    base_path = os.path.abspath(directory)
+    full_path = os.path.abspath(os.path.join(base_path, safe_filename))
+    
+    # Security: Ensure the resolved path is within the expected directory
+    if not full_path.startswith(base_path + os.sep) and full_path != base_path:
+        logger.warning(f"Path traversal attempt detected: {filename}")
+        return None
+    
+    # Check if file exists
+    if not os.path.isfile(full_path):
+        return None
+    
+    return full_path
 
 def extract_cv_text(file_path):
     text = ""
@@ -223,17 +288,15 @@ def extract_cv_text(file_path):
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
     except Exception as e:
-        print(f"Error reading file: {e}")
+        logger.error(f"Error reading file: {e}")
     return text
 
 def create_pdf(data, filename):
-    # Import BaseDocTemplate and Frame locally to fix the padding issue
     from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Flowable
 
-    # Random color scheme - ONE theme per PDF
     color_scheme = random.choice(COLOR_SCHEMES)
-    print(f"🎨 Using color scheme: {color_scheme['name']}")
+    logger.info(f"Using color scheme: {color_scheme['name']}")
     
     filepath = os.path.join(app.config['GENERATED_FOLDER'], filename)
     
@@ -241,7 +304,6 @@ def create_pdf(data, filename):
     sidebar_width = 180 
     main_width = page_width - sidebar_width
     
-    # 1. HELPER: Convert Hex to Alpha Color
     def hex_to_alpha(hex_code, alpha=0.15):
         hex_code = hex_code.lstrip('#')
         return colors.Color(
@@ -251,7 +313,6 @@ def create_pdf(data, filename):
             alpha=alpha
         )
 
-    # Colors
     sidebar_bg = colors.HexColor(color_scheme['sidebar_bg'])
     sidebar_text = colors.HexColor(color_scheme['sidebar_text'])
     text_dark = colors.HexColor(color_scheme['text_dark'])
@@ -259,10 +320,8 @@ def create_pdf(data, filename):
     text_light = colors.HexColor(color_scheme['text_light'])
     header_border = colors.HexColor(color_scheme['header_border'])
     
-    # Kept alpha=0.25 as per previous successful adjustment
     header_bg_transparent = hex_to_alpha(color_scheme['header_border'], alpha=0.25)
     
-    # 2. DOCUMENT SETUP (Using BaseDocTemplate for Zero Padding)
     doc = BaseDocTemplate(
         filepath,
         pagesize=A4,
@@ -272,14 +331,12 @@ def create_pdf(data, filename):
         bottomMargin=0
     )
 
-    # 3. BACKGROUND DRAWING (Sidebar)
     def draw_sidebar_bg(canvas, doc):
         canvas.saveState()
         canvas.setFillColor(sidebar_bg)
         canvas.rect(0, 0, sidebar_width, page_height, stroke=0, fill=1)
         canvas.restoreState()
 
-    # 4. CUSTOM FRAME (Explicitly 0 padding to fix the gap)
     full_frame = Frame(
         0, 0, page_width, page_height,
         leftPadding=0, bottomPadding=0, rightPadding=0, topPadding=0, 
@@ -291,11 +348,9 @@ def create_pdf(data, filename):
 
     styles = getSampleStyleSheet()
 
-    # === STYLE DEFINITIONS ===
     name_style = ParagraphStyle('NameStyle', parent=styles['Normal'], fontSize=28, fontName="Helvetica-Bold", textColor=text_dark, alignment=TA_CENTER, spaceAfter=4, leading=34)
     job_subtitle_style = ParagraphStyle('JobSubtitle', parent=styles['Normal'], fontSize=11, textColor=text_medium, alignment=TA_CENTER, spaceAfter=0, leading=14)
     
-    # Sidebar Section: Removed indent (0) so it relies on box padding
     sidebar_section_style = ParagraphStyle(
         'SidebarSection', 
         parent=styles['Normal'], 
@@ -308,7 +363,6 @@ def create_pdf(data, filename):
         leading=16
     )
     
-    # Sidebar Content: Added leftIndent=8 to align with Bullets and Header Padding
     sidebar_label = ParagraphStyle('SidebarLabel', parent=styles['Normal'], fontSize=9, fontName="Helvetica-Bold", textColor=sidebar_text, spaceBefore=6, spaceAfter=1, leftIndent=8)
     sidebar_value = ParagraphStyle('SidebarValue', parent=styles['Normal'], fontSize=9, textColor=sidebar_text, spaceAfter=4, leading=11, leftIndent=8)
     sidebar_bullet = ParagraphStyle('SidebarBullet', parent=styles['Normal'], fontSize=9, textColor=sidebar_text, leftIndent=8, spaceAfter=3, leading=11)
@@ -320,11 +374,9 @@ def create_pdf(data, filename):
     company_style = ParagraphStyle('CompanyStyle', parent=styles['Normal'], fontSize=10, textColor=text_medium, spaceAfter=4)
     bullet_style = ParagraphStyle('BulletStyle', parent=styles['Normal'], fontSize=9, textColor=text_medium, leftIndent=10, leading=12, spaceAfter=3)
     
-    # Education Styles: Added leftIndent=8
     edu_degree = ParagraphStyle('EduDegree', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold", textColor=sidebar_text, spaceBefore=4, spaceAfter=1, leftIndent=8)
     edu_detail = ParagraphStyle('EduDetail', parent=styles['Normal'], fontSize=9, textColor=sidebar_text, spaceAfter=2, leftIndent=8)
 
-    # === CUSTOM FLOWABLE: Name Box with Job Gap ===
     class NameJobFrame(Flowable):
         def __init__(self, name_text, job_text, name_style, job_style, border_color, bg_color, padding=15):
             Flowable.__init__(self)
@@ -341,68 +393,46 @@ def create_pdf(data, filename):
             self.name_p = Paragraph(self.name_text, self.name_style)
             self.job_p = Paragraph(self.job_text, self.job_style)
             
-            # Calculate how much space the text actually needs
             w_name, h_name = self.name_p.wrap(availWidth, availHeight)
             w_job, h_job = self.job_p.wrap(availWidth, availHeight)
             
             self.box_height = h_name + 2 * self.padding
             self.job_height = h_job
             
-            # --- CHANGE IS HERE ---
-            # Old: self.width = availWidth (This forced full width)
-            # New: Set width to the name's text width + padding
             self.width = w_job + -40
-            
-            # Optional: Ensure the box is at least as wide as the Job Title (+ margin)
-            # if (w_job + 30) > self.width:
-            #     self.width = w_job + 30
 
             self.height = self.box_height + (h_job / 2)
             return self.width, self.height
 
         def draw(self):
-            # Coordinates:
             box_bottom = self.job_height / 2
             box_top = box_bottom + self.box_height
             
-            # 1. Draw Background (Box only)
             self.canv.saveState()
             self.canv.setFillColor(self.bg_color)
             self.canv.rect(0, box_bottom, self.width, self.box_height, stroke=0, fill=0)
             
-            # 2. Draw Name
-            # --- ADD THIS LINE ---
-            # Re-wrap the name to the exact box width (minus padding) so 'CENTER' works correctly
             self.name_p.wrap(self.width - 2*self.padding, self.box_height)
             
-            # (Keep this line the same)
             self.name_p.drawOn(self.canv, self.padding, box_bottom + self.padding)
             
-            # 3. Draw Job Title
             if self.job_text:
-                # --- ADD THIS LINE ---
-                # Re-wrap job title to the full box width so it centers exactly on the border
                 self.job_p.wrap(self.width, self.job_height)
                 
-                # (Keep this line the same)
                 self.job_p.drawOn(self.canv, 0, 0)
                 
-                # Calculate gap width
                 job_width = stringWidth(self.job_text, self.job_style.fontName, self.job_style.fontSize)
                 gap_w = job_width + 20 
             else:
                 gap_w = 0
 
-            # 4. Draw Borders (The rest stays the same)
             self.canv.setStrokeColor(self.border_color)
             self.canv.setLineWidth(self.line_width)
             
-            # Top, Left, Right
-            self.canv.line(0, box_top, self.width, box_top) # Top
-            self.canv.line(0, box_bottom, 0, box_top)       # Left
-            self.canv.line(self.width, box_bottom, self.width, box_top) # Right
+            self.canv.line(0, box_top, self.width, box_top)
+            self.canv.line(0, box_bottom, 0, box_top)
+            self.canv.line(self.width, box_bottom, self.width, box_top)
             
-            # Bottom Line (Split for Gap)
             if gap_w > 0:
                 mid_x = self.width / 2
                 gap_start = mid_x - (gap_w / 2)
@@ -415,14 +445,12 @@ def create_pdf(data, filename):
                 
             self.canv.restoreState()
 
-    # Helper: Boxed Header
     def make_boxed_header(text, style, border_color, bg_color=None, fit_width=False):
         para = Paragraph(text, style)
         
         if fit_width:
             col_width = 135 
             
-            # Tighter style for sidebar labels
             table_style = [
                 ('BOX', (0, 0), (-1, -1), 0.75, border_color),
                 ('LEFTPADDING', (0, 0), (-1, -1), 8),
@@ -432,7 +460,6 @@ def create_pdf(data, filename):
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ]
         else:
-            # Original logic for main content
             col_width = style.leftIndent + style.rightIndent + 350
             table_style = [
                 ('BOX', (0, 0), (-1, -1), 1.5, border_color),
@@ -449,11 +476,9 @@ def create_pdf(data, filename):
         header_table.setStyle(TableStyle(table_style))
         return header_table
 
-    # === BUILD SIDEBAR CONTENT ===
     sidebar_elements = []
     sidebar_elements.append(Spacer(1, 15))
     
-    # Use fit_width=True for sidebar headers
     sidebar_elements.append(make_boxed_header("Profile", sidebar_section_style, sidebar_text, fit_width=True))
     sidebar_elements.append(Spacer(1, 8))
     
@@ -511,8 +536,6 @@ def create_pdf(data, filename):
             for ach in achievements:
                 sidebar_elements.append(Paragraph(f" {ach}", sidebar_bullet))
 
-    # === BUILD MAIN CONTENT ===
-    # 1. Header (Custom NameJobFrame)
     name = data.get('full_name', 'Your Name')
     job_title = data.get('job_title', '')
     
@@ -536,7 +559,6 @@ def create_pdf(data, filename):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
     
-    # 2. Body
     body_elements = []
     body_elements.append(Spacer(1, 16))
 
@@ -571,7 +593,6 @@ def create_pdf(data, filename):
                 for bullet in proj.get('bullets', []): body_elements.append(Paragraph(f"• {bullet}", bullet_style))
                 body_elements.append(Spacer(1, 10))
 
-    # Body Table (Padded)
     body_inner = [[elem] for elem in body_elements]
     body_table = Table(body_inner, colWidths=[main_width])
     body_table.setStyle(TableStyle([
@@ -581,7 +602,6 @@ def create_pdf(data, filename):
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
 
-    # Main Stack (Header + Body)
     main_stack = Table([[header_table], [body_table]], colWidths=[main_width])
     main_stack.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), header_bg_transparent),
@@ -592,7 +612,6 @@ def create_pdf(data, filename):
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
 
-    # === FINAL LAYOUT ===
     sidebar_inner = [[elem] for elem in sidebar_elements]
     sidebar_table = Table(sidebar_inner, colWidths=[sidebar_width])
     sidebar_table.setStyle(TableStyle([
@@ -602,7 +621,6 @@ def create_pdf(data, filename):
         ('TOPPADDING', (0, 0), (-1, -1), 0),
     ]))
     
-    # Master Table
     layout_data = [[sidebar_table, main_stack]]
     layout_table = Table(layout_data, colWidths=[sidebar_width, main_width])
     layout_table.setStyle(TableStyle([
@@ -725,23 +743,23 @@ def generate_cv_json(cv_text, job_desc, job_link, cadence='medium', voice_bank=N
     generation_config = get_generation_config(cadence)
     
     for model_name in VALID_MODELS:
-        print(f"🔄 Trying model: {model_name}...")
+        logger.info(f"Trying model: {model_name}...")
         try:
             model = genai.GenerativeModel(model_name)
             response = model.generate_content(prompt, generation_config=generation_config)
             
             clean_text = response.text.replace('```json', '').replace('```', '')
-            print(f"✅ SUCCESS! Generated with: {model_name}")
+            logger.info(f"SUCCESS! Generated with: {model_name}")
             cv_data = json.loads(clean_text)
             cv_data = clean_cv_data(cv_data)
             return cv_data
             
         except Exception as e:
-            print(f"⚠️ Failed ({model_name}): {e}")
-            print("   -> Skipping to next model...")
+            logger.warning(f"Failed ({model_name}): {e}")
+            logger.info("Skipping to next model...")
             continue
 
-    print("❌ CRITICAL: All models failed.")
+    logger.error("CRITICAL: All models failed.")
     return None
 
 VAGUE_PHRASES = [
@@ -803,92 +821,109 @@ def generate_quality_report(cv_data):
     return issues
 
 @app.route('/')
-def index(): return render_template('landingpage.html')
+def index(): 
+    return render_template('landingpage.html')
 
 @app.route('/upload')
-def upload_cv(): return render_template('Cvupload.html')
+def upload_cv(): 
+    return render_template('Cvupload.html')
 
 @app.route('/results')
-def results(): return render_template('results.html')
+def results(): 
+    return render_template('results.html')
 
 @app.route('/subscriptions')
-def subscriptions(): return render_template('subscriptions.html')
+def subscriptions(): 
+    return render_template('subscriptions.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    # 1. We still accept the file upload so the frontend doesn't crash
-    if 'cv' not in request.files: return jsonify({'error': 'No file'}), 400
-    file = request.files['cv']
-    
-    # 2. We skip extraction and AI generation entirely
-    print("⚠️ MOCK MODE: Skipping AI, using dummy data for layout testing.")
-
-    # 3. Define the Dummy Data
-    cv_data = {
-        "full_name": "Mia Smith",
-        "job_title": "Cheif Executive Officer",
-        "email": "leonardofrazer@yahoo.co.uk",
-        "location": "Liverpool, UK",
-        "links": [
-            {"label": "Portfolio", "url": "editsbylennox.my.canva.site/vfx-portfolio"},
-        ],
-        "summary": "I'm a video editor who really enjoys making short, punchy content that grabs attention right away. I'm good at working with others to nail a creative vision.",
-        "skills": [
-            "Video Editing", "Graphic Design", "Creative Strategy", 
-            "Adobe Premiere Pro", "After Effects", "DaVinci Resolve"
-        ],
-        "experience": [
-            {
-                "role": "Video Editor (Freelance)",
-                "company": "Self-Employed",
-                "dates": "Jan 2022 - Present",
-                "bullets": [
-                    "Worked closely with car dealerships to figure out exactly what their brand looked like.",
-                    "Got raw footage looking top-notch using color grading.",
-                    "Helped out with podcast videos for creators like Iman Ghazi."
-                ]
-            },
-            {
-                "role": "Junior Editor",
-                "company": "Creative Agency London",
-                "dates": "2020 - 2021",
-                "bullets": [
-                    "Assisted senior editors with rough cuts and timeline management.",
-                    "Organized terabytes of footage for quick access."
-                ]
-            }
-        ],
-        "education": [
-            {
-                "degree": "BSC Game Design",
-                "institution": "University of Liverpool",
-                "dates": "2023-2026",
-                "grade": "In Progress"
-            },
-            {
-                "degree": "Level 3 in Game Design",
-                "institution": "Carshalton College",
-                "dates": "2021-2023",
-                "grade": "Distinction"
-            }
-        ],
-        "achievements": [
-            "Duke Of Edinburgh Award - Bronze",
-            "Video Editing Competition - Sutra Edits"
-        ]
-    }
-
-    # 4. Create the PDF using the dummy data
-    filename = secure_filename(file.filename)
-    base_name = os.path.splitext(filename)[0]
-    pdf_name = f"{base_name}_TEST_LAYOUT.pdf"  
-
     try:
-        # Pass the dummy data to your create_pdf function
-        create_pdf(cv_data, pdf_name)
-        quality_report = generate_quality_report(cv_data)
+        # Security: Validate file presence
+        if 'cv' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
         
-        # Return success (frontend thinks AI did it)
+        file = request.files['cv']
+        
+        # Security: Validate filename
+        if not file.filename:
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Security: Check file extension
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only PDF and DOCX files are allowed.'}), 400
+        
+        logger.info("Processing CV upload...")
+
+        # Dummy data for layout testing (as per original code)
+        cv_data = {
+            "full_name": "Mia Smith",
+            "job_title": "Chief Executive Officer",
+            "email": "leonardofrazer@yahoo.co.uk",
+            "location": "Liverpool, UK",
+            "links": [
+                {"label": "Portfolio", "url": "editsbylennox.my.canva.site/vfx-portfolio"},
+            ],
+            "summary": "I'm a video editor who really enjoys making short, punchy content that grabs attention right away. I'm good at working with others to nail a creative vision.",
+            "skills": [
+                "Video Editing", "Graphic Design", "Creative Strategy", 
+                "Adobe Premiere Pro", "After Effects", "DaVinci Resolve"
+            ],
+            "experience": [
+                {
+                    "role": "Video Editor (Freelance)",
+                    "company": "Self-Employed",
+                    "dates": "Jan 2022 - Present",
+                    "bullets": [
+                        "Worked closely with car dealerships to figure out exactly what their brand looked like.",
+                        "Got raw footage looking top-notch using color grading.",
+                        "Helped out with podcast videos for creators like Iman Ghazi."
+                    ]
+                },
+                {
+                    "role": "Junior Editor",
+                    "company": "Creative Agency London",
+                    "dates": "2020 - 2021",
+                    "bullets": [
+                        "Assisted senior editors with rough cuts and timeline management.",
+                        "Organized terabytes of footage for quick access."
+                    ]
+                }
+            ],
+            "education": [
+                {
+                    "degree": "BSC Game Design",
+                    "institution": "University of Liverpool",
+                    "dates": "2023-2026",
+                    "grade": "In Progress"
+                },
+                {
+                    "degree": "Level 3 in Game Design",
+                    "institution": "Carshalton College",
+                    "dates": "2021-2023",
+                    "grade": "Distinction"
+                }
+            ],
+            "achievements": [
+                "Duke Of Edinburgh Award - Bronze",
+                "Video Editing Competition - Sutra Edits"
+            ]
+        }
+
+        # Security: Sanitize filename for PDF generation
+        original_filename = secure_filename(file.filename)
+        if not original_filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+            
+        base_name = os.path.splitext(original_filename)[0]
+        # Security: Ensure base_name is alphanumeric with underscores/hyphens only
+        base_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', base_name)
+        pdf_name = f"{base_name}_CV.pdf"
+
+        # Create the PDF
+        create_pdf(cv_data, pdf_name)
+        generate_quality_report(cv_data)
+        
         return jsonify({
             'success': True,
             'pdf_url': f"/download/{pdf_name}",
@@ -896,11 +931,48 @@ def analyze():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    
+        # Security: Log the actual error server-side, return generic message to user
+        logger.error(f"Error in analyze endpoint: {e}", exc_info=True)
+        return jsonify({'error': 'An error occurred while processing your request. Please try again.'}), 500
+
+
 @app.route('/download/<filename>')
 def download(filename):
-    return send_file(os.path.join(app.config['GENERATED_FOLDER'], filename), as_attachment=True)
+    """
+    Security: Secure file download endpoint with path traversal protection
+    """
+    # Security: Validate and sanitize the filename
+    safe_path = validate_file_path(app.config['GENERATED_FOLDER'], filename)
+    
+    if safe_path is None:
+        logger.warning(f"Invalid download attempt for: {filename}")
+        abort(404)
+    
+    return send_file(safe_path, as_attachment=True)
+
+
+# Security: Custom error handlers to prevent information leakage
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({'error': 'Resource not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Internal server error: {error}")
+    return jsonify({'error': 'An internal error occurred'}), 500
+
+@app.errorhandler(413)
+def file_too_large(error):
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Security: NEVER run with debug=True in production
+    # Use environment variable to control debug mode
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+    
+    # Security: In production, debug should always be False
+    if os.getenv('FLASK_ENV') == 'production':
+        debug_mode = False
+    
+    app.run(debug=debug_mode)

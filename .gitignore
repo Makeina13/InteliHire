@@ -8,3 +8,19 @@ __pycache__/
 env/
 venv/
 .vscode/
+# Logs
+*.log
+
+# Local test files
+test_security.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables
+.env
