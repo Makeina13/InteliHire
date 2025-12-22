@@ -967,12 +967,9 @@ def file_too_large(error):
 
 
 if __name__ == '__main__':
-    # Security: NEVER run with debug=True in production
-    # Use environment variable to control debug mode
-    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+    # 1. Look for 'FLASK_DEBUG' in your .env file
+    # 2. If it's not there, it defaults to False (Secure)
+    debug_setting = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 't']
     
-    # Security: In production, debug should always be False
-    if os.getenv('FLASK_ENV') == 'production':
-        debug_mode = False
-    
-    app.run(debug=debug_mode)
+    # 3. Use the variable instead of hardcoding True
+    app.run(host='0.0.0.0', port=5000, debug=debug_setting)
