@@ -291,11 +291,23 @@ def extract_cv_text(file_path):
         logger.error(f"Error reading file: {e}")
     return text
 
-def create_pdf(data, filename):
+def create_pdf(data, filename, color_scheme_index=None):
     from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Flowable
 
-    color_scheme = random.choice(COLOR_SCHEMES)
+    # Security: Validate color scheme index
+    if color_scheme_index is not None:
+        try:
+            color_scheme_index = int(color_scheme_index)
+            if 0 <= color_scheme_index < len(COLOR_SCHEMES):
+                color_scheme = COLOR_SCHEMES[color_scheme_index]
+            else:
+                color_scheme = random.choice(COLOR_SCHEMES)
+        except (ValueError, TypeError):
+            color_scheme = random.choice(COLOR_SCHEMES)
+    else:
+        color_scheme = random.choice(COLOR_SCHEMES)
+    
     logger.info(f"Using color scheme: {color_scheme['name']}")
     
     filepath = os.path.join(app.config['GENERATED_FOLDER'], filename)
@@ -493,7 +505,7 @@ def create_pdf(data, filename):
     if data.get('links'):
         for link in data.get('links', []):
             clean_url = link['url'].replace('https://', '').replace('http://', '').replace('www.', '')
-            sidebar_elements.append(Paragraph(f"✎ {link.get('label', 'Link')}", sidebar_label))
+            sidebar_elements.append(Paragraph(f"★ {link.get('label', 'Link')}", sidebar_label))
             sidebar_elements.append(Paragraph(clean_url, sidebar_value))
     
     if data.get('skills'):
@@ -503,7 +515,7 @@ def create_pdf(data, filename):
         
         for skill in data.get('skills', []):
             if skill:
-                sidebar_elements.append(Paragraph(f" {skill}", sidebar_bullet))
+                sidebar_elements.append(Paragraph(f"• {skill}", sidebar_bullet))
     
     if data.get('education'):
         sidebar_elements.append(Spacer(1, 12))
@@ -534,7 +546,7 @@ def create_pdf(data, filename):
             sidebar_elements.append(Spacer(1, 6))
             
             for ach in achievements:
-                sidebar_elements.append(Paragraph(f" {ach}", sidebar_bullet))
+                sidebar_elements.append(Paragraph(f"• {ach}", sidebar_bullet))
 
     name = data.get('full_name', 'Your Name')
     job_title = data.get('job_title', '')
@@ -648,26 +660,38 @@ def parse_voice_bank(form):
         'opinions': parse_list_field(form.get('opinions', '')),
         'metaphors': parse_list_field(form.get('metaphors', '')),
         'aside': form.get('aside', '').strip(),
-        'humour_allowed': form.get('humour_allowed', 'false').strip().lower() in {'true', '1', 'yes', 'on'}
     }
 
 def build_prompt(cv_text, job_desc, job_link, cadence, voice_bank):
     cadence_desc = CADENCE_PRESETS[cadence]['description']
-    
+
     voice_context = ""
+
     if voice_bank.get('aside'):
-        voice_context = f"\nCandidate background: {voice_bank['aside']}"
+        voice_context += f"\nCandidate background: {voice_bank['aside']}"
+    if voice_bank.get('voice_phrases'):
+        voice_context += f"\nPreferred phrases: {', '.join(voice_bank['voice_phrases'])}"
+    if voice_bank.get('opinions'):
+        voice_context += f"\nAllowed opinion style: {', '.join(voice_bank['opinions'])}"
+    if voice_bank.get('metaphors'):
+        voice_context += f"\nAllowed metaphor style: {', '.join(voice_bank['metaphors'])}"
 
     return f"""You are a human CV writer. Write like a person, not an AI.
 
-JOB: {job_desc}
+Writing style target: {cadence_desc}
+
+JOB DESCRIPTION:
+{job_desc}
+
+JOB LINK:
+{job_link}
 {voice_context}
 
 ## STEP 1: UNDERSTAND WHY AI TEXT GETS DETECTED
 
 AI writes like this (NEVER DO THIS):
 - "Played a key role in enhancing X by fostering Y"
-- "Took initiative in resolving issues, ensuring smooth operations"  
+- "Took initiative in resolving issues, ensuring smooth operations"
 - "Boosted revenue by implementing strategies"
 - "Developed and delivered focused talks that increased engagement"
 - "Acted as the primary advocate, directly resulting in..."
@@ -681,60 +705,60 @@ These get flagged because:
 
 ## STEP 2: WRITE LIKE THIS INSTEAD
 
-SUMMARY (first person, semi-casual but professional):
+SUMMARY:
+- First person
+- Semi-casual but professional
+- Natural contractions
+- Clear and human
 
-EXPERIENCE BULLETS (tell mini-stories, vary length):
-
+EXPERIENCE BULLETS:
+- Tell mini-stories
+- Vary sentence length
+- Avoid robotic patterns
+- Sound specific and believable
 
 ## STEP 3: STRUCTURAL RULES
 
-1. Bullet lengths MUST vary:
-   - One bullet: 20-30 words (the story)
-   - Next bullet: 5-12 words (just the fact)
-   - Next bullet: 15-20 words (medium with context)
+1. Bullet lengths MUST vary.
+2. Start bullets differently.
+3. Include one subtle human element per job, such as:
+   - a short fragment
+   - a parenthetical
+   - an honest qualifier
+   - a mild opinion
 
-2. Start bullets differently:
-   - "I..." / "Got..." / "Ran..." / "Fixed..." / "Helped..."
-   - "Our team..." / "The project..." / "That summer..."
-   - Never start two bullets the same way
+4. BANNED WORDS:
+enhancing, fostering, implementing, ensuring, utilizing,
+leveraging, spearheading, facilitating, demonstrating,
+collaborative, innovative, dynamic, strategic,
+passionate, dedicated, driven,
+"played a key role", "took initiative", "resulting in",
+"the planning and delivery of"
 
-3. Include ONE of these human elements per job:
-   - A short fragment: "Nothing major."
-   - A parenthetical: "—not as easy as it sounds"
-   - An honest qualifier: "probably", "about", "roughly"
-   - A mild opinion: "Worked really well"
+5. Do not leave more than one space between words.
 
-4. BANNED WORDS (if you use these, you fail):
-   enhancing, fostering, implementing, ensuring, utilizing
-   leveraging, spearheading, facilitating, demonstrating
-   collaborative, innovative, dynamic, strategic
-   passionate, dedicated, driven,
-   "played a key role", "took initiative", "resulting in"
-   "the planning and delivery of"
-
-5. Do not leave more than two spaces in between each word 
-
-6. Do not use any "-" 
-
-
-
-## INPUT CV:
+## INPUT CV
 {cv_text}
 
-## OUTPUT (JSON only, no explanation):
+## OUTPUT RULES
+Return valid JSON only.
+Do not include markdown fences.
+Do not include explanations.
+If any value is missing, use "" or [].
+
+## OUTPUT FORMAT
 {{
     "full_name": "string",
+    "job_title": "string",
     "email": "string",
-    "location": "string", 
+    "location": "string",
     "links": [{{"label": "string", "url": "string"}}],
-    "summary": "First person. 3-4 sentences. Contractions. sounds professional but not robotic",
+    "summary": "string",
     "achievements": ["string"],
-    "projects": [{{"title": "string", "tech": "string", "bullets": ["varied length human sentences"]}}],
-    "experience": [{{"role": "string", "company": "string", "dates": "string", "bullets": ["MUST vary in length and structure"]}}],
+    "projects": [{{"title": "string", "tech": "string", "bullets": ["string"]}}],
+    "experience": [{{"role": "string", "company": "string", "dates": "string", "bullets": ["string"]}}],
     "education": [{{"degree": "string", "institution": "string", "dates": "string", "grade": "string", "modules": ["string"]}}],
     "skills": ["string"]
-
-    IMPORTANT: if any information is missing from this list leave the space blank 
 }}"""
 
 def generate_cv_json(cv_text, job_desc, job_link, cadence='medium', voice_bank=None):
@@ -782,7 +806,7 @@ MONTH_TOKENS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 def bullet_has_anchor(text, skills_lower):
     if not text:
         return False
-    if re.search(r"[0-9%£$€]", text):
+    if re.search(r"[0-9%Â£$â‚¬]", text):
         return True
     lower = text.lower()
     if any(month in lower for month in MONTH_TOKENS):
@@ -838,102 +862,92 @@ def subscriptions():
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
+    temp_path = None
     try:
-        # Security: Validate file presence
         if 'cv' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
-        
+
         file = request.files['cv']
-        
-        # Security: Validate filename
+
         if not file.filename:
             return jsonify({'error': 'No file selected'}), 400
-        
-        # Security: Check file extension
+
         if not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Only PDF and DOCX files are allowed.'}), 400
-        
+
         logger.info("Processing CV upload...")
 
-        # Dummy data for layout testing (as per original code)
-        cv_data = {
-            "full_name": "Mia Smith",
-            "job_title": "Chief Executive Officer",
-            "email": "leonardofrazer@yahoo.co.uk",
-            "location": "Liverpool, UK",
-            "links": [
-                {"label": "Portfolio", "url": "editsbylennox.my.canva.site/vfx-portfolio"},
-            ],
-            "summary": "I'm a video editor who really enjoys making short, punchy content that grabs attention right away. I'm good at working with others to nail a creative vision.",
-            "skills": [
-                "Video Editing", "Graphic Design", "Creative Strategy", 
-                "Adobe Premiere Pro", "After Effects", "DaVinci Resolve"
-            ],
-            "experience": [
-                {
-                    "role": "Video Editor (Freelance)",
-                    "company": "Self-Employed",
-                    "dates": "Jan 2022 - Present",
-                    "bullets": [
-                        "Worked closely with car dealerships to figure out exactly what their brand looked like.",
-                        "Got raw footage looking top-notch using color grading.",
-                        "Helped out with podcast videos for creators like Iman Ghazi."
-                    ]
-                },
-                {
-                    "role": "Junior Editor",
-                    "company": "Creative Agency London",
-                    "dates": "2020 - 2021",
-                    "bullets": [
-                        "Assisted senior editors with rough cuts and timeline management.",
-                        "Organized terabytes of footage for quick access."
-                    ]
-                }
-            ],
-            "education": [
-                {
-                    "degree": "BSC Game Design",
-                    "institution": "University of Liverpool",
-                    "dates": "2023-2026",
-                    "grade": "In Progress"
-                },
-                {
-                    "degree": "Level 3 in Game Design",
-                    "institution": "Carshalton College",
-                    "dates": "2021-2023",
-                    "grade": "Distinction"
-                }
-            ],
-            "achievements": [
-                "Duke Of Edinburgh Award - Bronze",
-                "Video Editing Competition - Sutra Edits"
-            ]
-        }
-
-        # Security: Sanitize filename for PDF generation
+        # Secure uploaded filename
         original_filename = secure_filename(file.filename)
         if not original_filename:
             return jsonify({'error': 'Invalid filename'}), 400
-            
+
+        # Save uploaded file temporarily
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+        file.save(temp_path)
+
+        # Extract text from the uploaded CV
+        cv_text = extract_cv_text(temp_path)
+        if not cv_text or not cv_text.strip():
+            return jsonify({'error': 'Could not extract text from the uploaded CV.'}), 400
+
+        # Get form inputs
+        job_desc = request.form.get('job_description', '').strip()
+        job_link = request.form.get('job_link', '').strip()
+        cadence = normalize_cadence(request.form.get('cadence', 'medium'))
+        voice_bank = parse_voice_bank(request.form)
+
+        # Generate CV data using your strict AI rules
+        cv_data = generate_cv_json(
+            cv_text=cv_text,
+            job_desc=job_desc,
+            job_link=job_link,
+            cadence=cadence,
+            voice_bank=voice_bank
+        )
+
+        if not cv_data:
+            return jsonify({'error': 'Failed to generate CV content from the uploaded file.'}), 500
+
+        # Optional: add job title from form if you want it shown in the PDF header
+        cv_data['job_title'] = request.form.get('job_title', '').strip()
+
+        # Secure output filename
         base_name = os.path.splitext(original_filename)[0]
-        # Security: Ensure base_name is alphanumeric with underscores/hyphens only
         base_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', base_name)
         pdf_name = f"{base_name}_CV.pdf"
 
-        # Create the PDF
-        create_pdf(cv_data, pdf_name)
-        generate_quality_report(cv_data)
-        
+        # Validate colour scheme selection
+        color_scheme_index = request.form.get('color_scheme', '0')
+        try:
+            color_scheme_index = int(color_scheme_index)
+            if not (0 <= color_scheme_index < len(COLOR_SCHEMES)):
+                color_scheme_index = 0
+        except (ValueError, TypeError):
+            color_scheme_index = 0
+
+        # Create PDF from generated CV data
+        create_pdf(cv_data, pdf_name, color_scheme_index)
+
+        quality_report = generate_quality_report(cv_data)
+
         return jsonify({
             'success': True,
             'pdf_url': f"/download/{pdf_name}",
-            'quality_report': []
+            'quality_report': quality_report
         })
 
     except Exception as e:
-        # Security: Log the actual error server-side, return generic message to user
         logger.error(f"Error in analyze endpoint: {e}", exc_info=True)
         return jsonify({'error': 'An error occurred while processing your request. Please try again.'}), 500
+
+    finally:
+        # Clean up uploaded file after processing
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as cleanup_error:
+                logger.warning(f"Could not delete temp file {temp_path}: {cleanup_error}")
 
 
 @app.route('/download/<filename>')
